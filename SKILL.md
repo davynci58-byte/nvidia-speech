@@ -133,7 +133,7 @@ Transcribe a WAV audio file to text using the hosted Nemotron ASR API.
 Generate a WAV audio file from text using the hosted Magpie TTS API.
 
 ### `scripts/process_audio.py`
-**Primary entry point for incoming audio.** Auto-detects format, converts any audio (OGG, MP3, WAV, M4A, etc.) to 16 kHz mono WAV via ffmpeg, then transcribes with Nemotron ASR.
+**Primary entry point for incoming audio.** Auto-detects format, converts any audio (OGG, MP3, WAV, M4A, etc.) to 16 kHz mono WAV via ffmpeg, then transcribes with Nemotron ASR Streaming. Handles long audio by splitting into 3-second overlapping chunks (the streaming model has a maximum input length per session). Uses trailing silence to flush final results.
 
 Both `transcribe.py` and `process_audio.py` read `NVIDIA_API_KEY` from the environment. Run any script with `--help` for options.
 
