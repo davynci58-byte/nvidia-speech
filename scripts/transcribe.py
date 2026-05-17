@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Transcribe a WAV audio file using NVIDIA Nemotron ASR (hosted on build.nvidia.com).
+Transcribe a WAV audio file using NVIDIA Nemotron ASR Streaming (hosted on build.nvidia.com).
 
 Usage:
     export NVIDIA_API_KEY=nvapi-...
@@ -12,8 +12,12 @@ Requires: pip install nvidia-riva-client
 import argparse
 import os
 import sys
+import wave
 
 import riva.client
+
+
+ASR_SAMPLE_RATE = 16000
 
 
 def build_auth(api_key: str) -> riva.client.Auth:
@@ -35,21 +39,40 @@ def transcribe(audio_path: str, language: str = "en-US") -> str:
     auth = build_auth(api_key)
     asr_service = riva.client.ASRService(auth)
 
-    with open(audio_path, "rb") as f:
-        audio = f.read()
+    # Read the WAV file
+    with wave.open(audio_path, "rb") as wf:
+        sample_rate = wf.getframerate()
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        raw_audio = wf.readframes(wf.getnframes())
 
+    # Streaming config
     config = riva.client.RecognitionConfig(
+        encoding=riva.client.AudioEncoding.LINEAR_PCM,
+        sample_rate_hertz=sample_rate,
         language_code=language,
         max_alternatives=1,
         enable_automatic_punctuation=True,
         enable_word_time_offsets=False,
     )
+    streaming_config = riva.client.StreamingRecognitionConfig(
+        config=config,
+        interim_results=False,
+    )
 
-    response = asr_service.offline_recognize(audio, config)
-    if not response.results:
-        return ""
+    # Break audio into chunks (~100ms each)
+    chunk_bytes = 1600 * sampwidth * n_channels
+    chunks = [raw_audio[i:i + chunk_bytes] for i in range(0, len(raw_audio), chunk_bytes)]
 
-    return response.results[0].alternatives[0].transcript
+    # Stream
+    full_transcript = ""
+    for response in asr_service.streaming_response_generator(chunks, streaming_config):
+        for result in response.results:
+            if result.is_final:
+                for alt in result.alternatives:
+                    full_transcript += alt.transcript
+
+    return full_transcript
 
 
 def main():
