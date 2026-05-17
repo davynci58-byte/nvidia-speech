@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.*
+*.env
+
+# NVIDIA API key anywhere
+**/nvapi-*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.wav
+*.mp3
+!scripts/*.py  # don't ignore the audio scripts themselves
