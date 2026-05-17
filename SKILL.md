@@ -9,12 +9,15 @@ Free hosted API endpoints for **Nemotron ASR** (STT) and **Magpie TTS** using NV
 
 ## Quick Reference
 
-| Model | Type | Params | Function ID |
-|---|---|---|---|
-| Nemotron ASR Streaming | Speech-to-Text | 600M | `bb0837de-8c7b-481f-9ec8-ef5663e9c1fa` |
-| Magpie TTS Multilingual | Text-to-Speech | 357M | `877104f7-e885-42b9-8de8-f6e4c6303969` |
+| Model | Type | Params | Function ID | Mode |
+|---|---|---|---|---|
+| **Canary-1B** ★ | Speech-to-Text | 1B | `b0e8b4a5-217c-40b7-9b96-17d84e666317` | Offline (fastest) |
+| Nemotron ASR Streaming | Speech-to-Text | 600M | `bb0837de-8c7b-481f-9ec8-ef5663e9c1fa` | Streaming |
+| Magpie TTS Multilingual | Text-to-Speech | 357M | `877104f7-e885-42b9-8de8-f6e4c6303969` | gRPC |
 
 **gRPC endpoint:** `grpc.nvcf.nvidia.com:443`
+
+**As of 2026-05:** Canary-1B (multilingual) is the recommended STT model. It uses `offline_recognize` (no chunking, single API call) and handles diverse accents better than Nemotron.
 
 ### Available TTS Voices (Magpie Multilingual)
 
