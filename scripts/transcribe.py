@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Transcribe a WAV audio file using NVIDIA Nemotron ASR Streaming (hosted on build.nvidia.com).
-
-Usage:
-    export NVIDIA_API_KEY=nvapi-...
-    python transcribe.py audio.wav
-    python transcribe.py audio.wav --language en-US --output transcript.txt
-
-Requires: pip install nvidia-riva-client
-"""
+"""Transcribe a WAV file using NVIDIA Nemotron ASR Streaming."""
 import argparse
 import os
 import sys
@@ -16,83 +7,70 @@ import wave
 
 import riva.client
 
+FUNCTION_ID = "bb0837de-8c7b-481f-9ec8-ef5663e9c1fa"
+RATE = 16000
 
-ASR_SAMPLE_RATE = 16000
 
-
-def build_auth(api_key: str) -> riva.client.Auth:
+def build_auth(api_key):
     return riva.client.Auth(
-        uri="grpc.nvcf.nvidia.com:443",
-        use_ssl=True,
+        uri="grpc.nvcf.nvidia.com:443", use_ssl=True,
         metadata_args=[
-            ["function-id", "bb0837de-8c7b-481f-9ec8-ef5663e9c1fa"],
+            ["function-id", FUNCTION_ID],
             ["authorization", f"Bearer {api_key}"],
         ],
     )
 
 
-def transcribe(audio_path: str, language: str = "en-US") -> str:
+def transcribe(audio_path, language="en-US"):
     api_key = os.environ.get("NVIDIA_API_KEY")
     if not api_key:
-        sys.exit("ERROR: Set NVIDIA_API_KEY environment variable")
+        sys.exit("ERROR: Set NVIDIA_API_KEY")
 
-    auth = build_auth(api_key)
-    asr_service = riva.client.ASRService(auth)
-
-    # Read the WAV file
     with wave.open(audio_path, "rb") as wf:
-        sample_rate = wf.getframerate()
-        n_channels = wf.getnchannels()
-        sampwidth = wf.getsampwidth()
-        raw_audio = wf.readframes(wf.getnframes())
+        sr = wf.getframerate()
+        sw = wf.getsampwidth()
+        nc = wf.getnchannels()
+        raw = wf.readframes(wf.getnframes())
 
-    # Streaming config
+    # Add trailing silence
+    raw = raw + b'\x00\x00' * int(RATE * 0.5)
+
     config = riva.client.RecognitionConfig(
         encoding=riva.client.AudioEncoding.LINEAR_PCM,
-        sample_rate_hertz=sample_rate,
-        language_code=language,
-        max_alternatives=1,
-        enable_automatic_punctuation=True,
-        enable_word_time_offsets=False,
+        sample_rate_hertz=sr, language_code=language,
+        max_alternatives=1, enable_automatic_punctuation=True,
     )
-    streaming_config = riva.client.StreamingRecognitionConfig(
-        config=config,
-        interim_results=False,
-    )
+    sc = riva.client.StreamingRecognitionConfig(config=config, interim_results=False)
 
-    # Break audio into chunks (~100ms each)
-    chunk_bytes = 1600 * sampwidth * n_channels
-    chunks = [raw_audio[i:i + chunk_bytes] for i in range(0, len(raw_audio), chunk_bytes)]
+    chunk = 5120
+    chunks = [raw[i:i + chunk] for i in range(0, len(raw), chunk)]
 
-    # Stream
-    full_transcript = ""
-    for response in asr_service.streaming_response_generator(chunks, streaming_config):
-        for result in response.results:
-            if result.is_final:
-                for alt in result.alternatives:
-                    full_transcript += alt.transcript
-
-    return full_transcript
+    asr = riva.client.ASRService(build_auth(api_key))
+    out = []
+    for resp in asr.streaming_response_generator(chunks, sc):
+        for r in resp.results:
+            if r.is_final:
+                for a in r.alternatives:
+                    t = a.transcript.strip()
+                    if t:
+                        out.append(t)
+    return " ".join(out)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Transcribe audio with NVIDIA Nemotron ASR")
-    parser.add_argument("audio", help="Path to WAV audio file (16 kHz mono recommended)")
-    parser.add_argument("--language", default="en-US", help="Language code (default: en-US)")
-    parser.add_argument("--output", "-o", help="Write transcript to file instead of stdout")
-    args = parser.parse_args()
-
+    p = argparse.ArgumentParser()
+    p.add_argument("audio")
+    p.add_argument("--language", default="en-US")
+    p.add_argument("-o", "--output")
+    args = p.parse_args()
     if not os.path.isfile(args.audio):
-        sys.exit(f"ERROR: File not found: {args.audio}")
-
-    text = transcribe(args.audio, language=args.language)
-
+        sys.exit(f"ERROR: file not found: {args.audio}")
+    t = transcribe(args.audio, args.language)
     if args.output:
         with open(args.output, "w") as f:
-            f.write(text + "\n")
-        print(f"Transcript written to {args.output}")
+            f.write(t + "\n")
     else:
-        print(text)
+        print(t)
 
 
 if __name__ == "__main__":
